@@ -43,6 +43,23 @@ mutable struct RegistryMeta
         end
         return new(url, Dict{String,String}())
     end
+
+    function RegistryMeta(url::String, offline::Bool)
+        # Check to ensure this path actually exists
+        is_valid = offline ? isdir : is_url
+
+        if is_valid(url)
+            throw(ArgumentError("Invalid unreachable registry '$(url)'"))
+        end
+        
+        # Auto-detect a repository that doesn't have `.git` at the end but could
+        git_url = string(url, ".git")
+        if !endswith(url, ".git") && is_valid(git_url)
+            url = git_url
+        end
+        
+        return new(url, Dict{String,String}())
+    end
 end
 
 struct ServerConfig
@@ -62,7 +79,7 @@ struct ServerConfig
                             storage_root = "/tmp/pkgserver",
                             registries = Dict(
                                 "23338594-aafe-5451-b93e-139f81909106" =>
-                                RegistryMeta("https://github.com/JuliaRegistries/General")
+                                RegistryMeta("https://github.com/JuliaRegistries/General", false)
                             ),
                             storage_servers = [
                                 "https://us-east.storage.juliahub.com",
@@ -326,6 +343,13 @@ function handle_request(http::HTTP.Stream)
         # If it doesn't exist locally, let's request a fetch on that resource.
         # This will return either `nothing` (e.g. resource does not exist) or
         # a `DownloadState` that represents a partial download.
+        
+        if config.is_offline
+            # ... however, if the server is offline, we can only quit early, as no extra package will be served
+            @warn("Non-existent resource was requested. Ignored.")
+            return
+        end
+
         dl_state = fetch_resource(resource, request_id)
         if dl_state !== nothing
             HTTP.setheader(http, "X-Cache-Miss" => "miss")
@@ -364,7 +388,7 @@ function handle_request(http::HTTP.Stream)
 
         # If we don't actually have the artifact locally, we need to fetch it first.
         artifact_path = resource_filepath(artifact_resource)
-        if !isfile(artifact_path)
+        if !isfile(artifact_path) && !config.is_offline
             dl_state = fetch_resource(artifact_resource, request_id)
             if dl_state !== nothing
                 # We actually need to wait for the download to finish so that we can

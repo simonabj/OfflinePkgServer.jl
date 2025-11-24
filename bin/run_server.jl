@@ -20,6 +20,7 @@ log_dir = get(ENV, "JULIA_PKG_SERVER_LOGS_DIR", joinpath(storage_root, "logs"))
 flavorless = get(ENV, "JULIA_PKG_SERVER_FLAVORLESS", "false")
 registry_update_period = parse(Float64, get(ENV, "JULIA_PKG_SERVER_REGISTRY_UPDATE_PERIOD", "1"))
 
+general_registry_path = get(ENV, "JULIA_GENERAL_REGISTRY_PATH", "/opt/julia_general/General")
 offline_state = parse(Bool, get(ENV, "JULIA_PKG_SERVER_OFFLINE", "false"));
 
 println("Offline State:")
@@ -70,6 +71,10 @@ global_logger(TeeLogger(
 PkgServer.start(;
     listen_addr=Sockets.InetAddr(host, port),
     storage_root,
+    registries = Dict(
+        "23338594-aafe-5451-b93e-139f81909106" =>
+        RegistryMeta(general_registry_path, offline_state)
+    ),
     storage_servers,
     dotflavors,
     registry_update_period,
