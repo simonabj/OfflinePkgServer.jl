@@ -162,6 +162,8 @@ function start(;kwargs...)
             error("Unable to get initial registry update!")
         end
         global last_registry_update = now()
+    else
+        @info("Package server starting in offline mode")
     end
 
     # Experimental.@sync throws if _any_ of the tasks fail
@@ -193,6 +195,8 @@ function start(;kwargs...)
                     sleep(max_time_lag.value)
                 end
             end
+        else
+            @info("Skipping registry update watchdog setup")
         end
 
         listen_server = Sockets.listen(config.listen_addr)
