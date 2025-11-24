@@ -20,6 +20,8 @@ log_dir = get(ENV, "JULIA_PKG_SERVER_LOGS_DIR", joinpath(storage_root, "logs"))
 flavorless = get(ENV, "JULIA_PKG_SERVER_FLAVORLESS", "false")
 registry_update_period = parse(Float64, get(ENV, "JULIA_PKG_SERVER_REGISTRY_UPDATE_PERIOD", "1"))
 
+offline_state = parse(Bool, get(ENV, "JULIA_PKG_SERVER_OFFLINE", "false"));
+
 dotflavors = [
     ".eager",
     ".conservative",
@@ -68,4 +70,5 @@ PkgServer.start(;
     storage_servers,
     dotflavors,
     registry_update_period,
+    is_offline=offline_state
 )

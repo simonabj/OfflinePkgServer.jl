@@ -55,6 +55,7 @@ struct ServerConfig
     dotflavors::Vector{String}
     registry_update_period::Float64
     admin_token_sha256::Union{String, Nothing}
+    is_offline::Bool
 
     # Default server config constructor
     function ServerConfig(; listen_addr = InetAddr(ip"127.0.0.1", 8000),
@@ -72,13 +73,18 @@ struct ServerConfig
                                 ".conservative",
                             ],
                             keep_free=3*1024^3,
-                            registry_update_period=1)
+                            registry_update_period=1,
+                            is_offline = false)
+
         # Right now, the only thing we store in `static/` is `/registries`
         mkpath(joinpath(storage_root, "static"))
+
         # Downloads get stored into `temp`
         mkpath(joinpath(storage_root, "temp"))
+        
         # Files get stored into `cache`
         mkpath(joinpath(storage_root, "cache"))
+        
         # /admin interface requires an admin token which must be configured when starting
         admin_token_sha256 = get(ENV, "JULIA_PKG_SERVER_ADMIN_TOKEN_SHA256", "")
         if isempty(admin_token_sha256)
@@ -107,6 +113,7 @@ struct ServerConfig
             dotflavors,
             registry_update_period,
             admin_token_sha256,
+            is_offline
         )
     end
 end
@@ -128,57 +135,63 @@ function start(;kwargs...)
     global config = ServerConfig(;kwargs...)
     flavorless_mode = config.dotflavors == [""]
 
-    # Update registries first thing
-    @info("Performing initial registry update")
-    initial_update_changed = any(update_registries.(config.dotflavors))
-    if !flavorless_mode
-        # Remove any old `registries` files from when we were a flavorless server
-        rm(joinpath(config.root, "static", "registries"); force=true)
+    # Skip initial registry update if offline
+    if !config.is_offline
+        # Update registries first thing
+        @info("Performing initial registry update")
+        initial_update_changed = any(update_registries.(config.dotflavors))
+        if !flavorless_mode
+            # Remove any old `registries` files from when we were a flavorless server
+            rm(joinpath(config.root, "static", "registries"); force=true)
 
-        if !initial_update_changed
-            @warn("Flavorless storage servers detected, falling back to flavorless mode")
-            flavorless_mode = true
-            empty!(config.dotflavors)
-            push!(config.dotflavors, "")
-        end
-    else
-        # Remove any old `registries.$(flavor)` files from when we were a flavorfull server
-        for f in readdir(joinpath(config.root, "static"); join=true)
-            if startswith(f, "registries.")
-                rm(f; force=true)
+            if !initial_update_changed
+                @warn("Flavorless storage servers detected, falling back to flavorless mode")
+                flavorless_mode = true
+                empty!(config.dotflavors)
+                push!(config.dotflavors, "")
+            end
+        else
+            # Remove any old `registries.$(flavor)` files from when we were a flavorfull server
+            for f in readdir(joinpath(config.root, "static"); join=true)
+                if startswith(f, "registries.")
+                    rm(f; force=true)
+                end
             end
         end
+        if !initial_update_changed && !any(update_registries.(config.dotflavors))
+            error("Unable to get initial registry update!")
+        end
+        global last_registry_update = now()
     end
-    if !initial_update_changed && !any(update_registries.(config.dotflavors))
-        error("Unable to get initial registry update!")
-    end
-    global last_registry_update = now()
 
     # Experimental.@sync throws if _any_ of the tasks fail
     Base.Experimental.@sync begin
-        global registry_update_task = @spawn begin
-            while true
-                sleep(config.registry_update_period)
-                @try_printerror begin
-                    forget_failures()
-                    update_registries.(config.dotflavors)
-                    last_registry_update = now()
+        # Only start registry watchdog task if online
+        if !config.is_offline
+            global registry_update_task = @spawn begin
+                while true
+                    sleep(config.registry_update_period)
+                    @try_printerror begin
+                        forget_failures()
+                        update_registries.(config.dotflavors)
+                        last_registry_update = now()
+                    end
                 end
             end
-        end
 
-        # Registry watchdog; if `last_registry_update` doesn't change
-        # for more than 20 minutes, we kill ourselves so that we can restart
-        max_time_lag = Second(20 * 60)
-        global registry_watchdog_task = @spawn begin
-            while true
-                time_lag = now() - last_registry_update
-                if time_lag > max_time_lag
-                    task_result = try fetch(registry_update_task); catch err; err end
-                    @error "registry update watchdog timer tripped" time_lag max_time_lag task_result
-                    exit(1)
+            # Registry watchdog; if `last_registry_update` doesn't change
+            # for more than 20 minutes, we kill ourselves so that we can restart
+            max_time_lag = Second(20 * 60)
+            global registry_watchdog_task = @spawn begin
+                while true
+                    time_lag = now() - last_registry_update
+                    if time_lag > max_time_lag
+                        task_result = try fetch(registry_update_task); catch err; err end
+                        @error "registry update watchdog timer tripped" time_lag max_time_lag task_result
+                        exit(1)
+                    end
+                    sleep(max_time_lag.value)
                 end
-                sleep(max_time_lag.value)
             end
         end
 
