@@ -22,6 +22,9 @@ registry_update_period = parse(Float64, get(ENV, "JULIA_PKG_SERVER_REGISTRY_UPDA
 
 offline_state = parse(Bool, get(ENV, "JULIA_PKG_SERVER_OFFLINE", "false"));
 
+println("Offline State:")
+println(offline_state)
+
 dotflavors = [
     ".eager",
     ".conservative",

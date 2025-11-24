@@ -135,6 +135,8 @@ function start(;kwargs...)
     global config = ServerConfig(;kwargs...)
     flavorless_mode = config.dotflavors == [""]
 
+    @info("Starting Server...", offline=config.is_offline)
+
     # Skip initial registry update if offline
     if !config.is_offline
         # Update registries first thing
