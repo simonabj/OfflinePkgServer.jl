@@ -46,7 +46,7 @@ mutable struct RegistryMeta
 
     function RegistryMeta(url::String, offline::Bool)
         # Check to ensure this path actually exists
-        is_valid = offline ? isdir : is_url
+        is_valid = offline ? isdir : url_exists
 
         if is_valid(url)
             throw(ArgumentError("Invalid unreachable registry '$(url)'"))
