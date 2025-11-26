@@ -134,10 +134,6 @@ function verify_registry_hash(uuid::AbstractString, hash::AbstractString)
 end
 
 function update_registries(dotflavor::String)
-    if config.is_offline
-        return true
-    end
-
     # collect current registry hashes from servers
     regs = Dict(uuid => Dict{String,Vector{String}}() for uuid in keys(config.registries))
     servers = Dict(uuid => Vector{String}() for uuid in keys(config.registries))
@@ -147,8 +143,9 @@ function update_registries(dotflavor::String)
             push!(servers[uuid], server)
         end
     end
-    # for each hash check what other servers know about it
+
     changed = false
+    # for each hash check what other servers know about it
     for (uuid, hash_info) in regs
         isempty(hash_info) && continue # keep serving what we're serving
         for (hash, hash_servers) in hash_info

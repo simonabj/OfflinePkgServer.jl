@@ -143,7 +143,7 @@ function start(;kwargs...)
     @info("Starting Server...", offline=config.is_offline)
 
     # Skip initial registry update if offline
-    # if !config.is_offline
+    if !config.is_offline
         # Update registries first thing
         @info("Performing initial registry update")
         initial_update_changed = any(update_registries.(config.dotflavors))
@@ -165,13 +165,13 @@ function start(;kwargs...)
                 end
             end
         end
-        if !initial_update_changed && !any(update_registries.(config.dotflavors))
+        if !initial_update_changed && !any(update_registries.(config.dotflavors)) && !config.is_offline
             error("Unable to get initial registry update!")
         end
         global last_registry_update = now()
-    # else
-    #     @info("Package server starting in offline mode")
-    # end
+    else
+        @info("Package server starting in offline mode")
+    end
 
     # Experimental.@sync throws if _any_ of the tasks fail
     Base.Experimental.@sync begin
