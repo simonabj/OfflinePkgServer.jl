@@ -48,6 +48,13 @@ mutable struct RegistryMeta
         # Check to ensure this path actually exists
         is_valid = offline ? isdir : url_exists
 
+        @info("RegistryMeta struct", url=url, offline=offline, chk_fcn=is_valid)
+
+        if isempty(url)
+            @warn "Empty URL in RegistryMeta. Is precompiling?"
+            return new(url,Dict{String, String}())
+        end
+
         if !is_valid(url)
             throw(ArgumentError("Invalid unreachable registry '$(url)'"))
         end
@@ -79,7 +86,7 @@ struct ServerConfig
                             storage_root = "/tmp/pkgserver",
                             registries = Dict(
                                 "23338594-aafe-5451-b93e-139f81909106" =>
-                                RegistryMeta("https://github.com/JuliaRegistries/General", false)
+                                RegistryMeta("", false)
                             ),
                             storage_servers = [
                                 "https://us-east.storage.juliahub.com",
@@ -347,6 +354,8 @@ function handle_request(http::HTTP.Stream)
         if config.is_offline
             # ... however, if the server is offline, we can only quit early, as no extra package will be served
             @warn("Non-existent resource was requested. Ignored.")
+            HTTP.setstatus(http, 404)
+            HTTP.write(http, "No cache exist for requested package or resource.")
             return
         end
 
