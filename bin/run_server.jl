@@ -76,7 +76,7 @@ PkgServer.start(;
     storage_root,
     registries = Dict(
         "23338594-aafe-5451-b93e-139f81909106" =>
-        PkgServer.RegistryMeta(general_registry_path, offline_state)
+        PkgServer.RegistryMeta(general_registry_path)
     ),
     storage_servers,
     dotflavors,

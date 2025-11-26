@@ -31,6 +31,11 @@ mutable struct RegistryMeta
     hashes::Dict{String,String}
 
     function RegistryMeta(url::String)
+        if isempty(url)
+            @warn "Empty URL in RegistryMeta. Is precompiling?"
+            return new(url,Dict{String, String}())
+        end
+
         # Check to ensure this path actually exists
         if !url_exists(url)
             throw(ArgumentError("Invalid unreachable registry '$(url)'"))
@@ -41,30 +46,6 @@ mutable struct RegistryMeta
         if !endswith(url, ".git") && url_exists(git_url)
             url = git_url
         end
-        return new(url, Dict{String,String}())
-    end
-
-    function RegistryMeta(url::String, offline::Bool)
-        # Check to ensure this path actually exists
-        is_valid = offline ? isdir : url_exists
-
-        @info("RegistryMeta struct", url=url, offline=offline, chk_fcn=is_valid)
-
-        if isempty(url)
-            @warn "Empty URL in RegistryMeta. Is precompiling?"
-            return new(url,Dict{String, String}())
-        end
-
-        if !is_valid(url)
-            throw(ArgumentError("Invalid unreachable registry '$(url)'"))
-        end
-        
-        # Auto-detect a repository that doesn't have `.git` at the end but could
-        git_url = string(url, ".git")
-        if !endswith(url, ".git") && is_valid(git_url)
-            url = git_url
-        end
-        
         return new(url, Dict{String,String}())
     end
 end
@@ -86,7 +67,7 @@ struct ServerConfig
                             storage_root = "/tmp/pkgserver",
                             registries = Dict(
                                 "23338594-aafe-5451-b93e-139f81909106" =>
-                                RegistryMeta("", false)
+                                RegistryMeta("")
                             ),
                             storage_servers = [
                                 "https://us-east.storage.juliahub.com",
@@ -162,7 +143,7 @@ function start(;kwargs...)
     @info("Starting Server...", offline=config.is_offline)
 
     # Skip initial registry update if offline
-    if !config.is_offline
+    # if !config.is_offline
         # Update registries first thing
         @info("Performing initial registry update")
         initial_update_changed = any(update_registries.(config.dotflavors))
@@ -188,9 +169,9 @@ function start(;kwargs...)
             error("Unable to get initial registry update!")
         end
         global last_registry_update = now()
-    else
-        @info("Package server starting in offline mode")
-    end
+    # else
+    #     @info("Package server starting in offline mode")
+    # end
 
     # Experimental.@sync throws if _any_ of the tasks fail
     Base.Experimental.@sync begin

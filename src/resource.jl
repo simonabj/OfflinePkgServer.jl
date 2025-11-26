@@ -113,8 +113,14 @@ end
 Send a `HEAD` request to the specified URL, returns `true` if the response is HTTP 200.
 """
 function url_exists(url::AbstractString)
-    response = HTTP.request("HEAD", url, status_exception = false)
-    response.status == 200
+    offline_state = parse(Bool, get(ENV, "JULIA_PKG_SERVER_OFFLINE", "false"));
+
+    if offline_state
+        isdir(url)
+    else
+        response = HTTP.request("HEAD", url, status_exception = false)
+        response.status == 200
+    end
 end
 
 """
@@ -128,6 +134,10 @@ function verify_registry_hash(uuid::AbstractString, hash::AbstractString)
 end
 
 function update_registries(dotflavor::String)
+    if config.is_offline
+        return true
+    end
+
     # collect current registry hashes from servers
     regs = Dict(uuid => Dict{String,Vector{String}}() for uuid in keys(config.registries))
     servers = Dict(uuid => Vector{String}() for uuid in keys(config.registries))
@@ -157,7 +167,7 @@ function update_registries(dotflavor::String)
 
             # If this hash is not already on the filesystem, we might need to fetch it!
             hash_servers = sort!(hash_info[hash])
-            if !isfile(resource_filepath(resource))
+            if !isfile(resource_filepath(resource)) && !config.is_offline
                 # check that the origin repo knows about this hash.  This prevents a
                 # rogue storage server from serving malicious registry tarballs.
                 if !verify_registry_hash(uuid, hash)
