@@ -175,36 +175,37 @@ function start(;kwargs...)
 
     # Experimental.@sync throws if _any_ of the tasks fail
     Base.Experimental.@sync begin
-        # Only start registry watchdog task if online
-        if !config.is_offline
-            global registry_update_task = @spawn begin
-                while true
-                    sleep(config.registry_update_period)
-                    @try_printerror begin
-                        forget_failures()
-                        update_registries.(config.dotflavors)
-                        last_registry_update = now()
-                    end
-                end
-            end
+        
+        # Do not setup registry watchdog. We want to snapshot the registry to ensure no packages gets updated during mirroring
+        # if !config.is_offline
+        #     global registry_update_task = @spawn begin
+        #         while true
+        #             sleep(config.registry_update_period)
+        #             @try_printerror begin
+        #                 forget_failures()
+        #                 update_registries.(config.dotflavors)
+        #                 last_registry_update = now()
+        #             end
+        #         end
+        #     end
 
-            # Registry watchdog; if `last_registry_update` doesn't change
-            # for more than 20 minutes, we kill ourselves so that we can restart
-            max_time_lag = Second(20 * 60)
-            global registry_watchdog_task = @spawn begin
-                while true
-                    time_lag = now() - last_registry_update
-                    if time_lag > max_time_lag
-                        task_result = try fetch(registry_update_task); catch err; err end
-                        @error "registry update watchdog timer tripped" time_lag max_time_lag task_result
-                        exit(1)
-                    end
-                    sleep(max_time_lag.value)
-                end
-            end
-        else
-            @info("Skipping registry update watchdog setup")
-        end
+        #     # Registry watchdog; if `last_registry_update` doesn't change
+        #     # for more than 20 minutes, we kill ourselves so that we can restart
+        #     max_time_lag = Second(20 * 60)
+        #     global registry_watchdog_task = @spawn begin
+        #         while true
+        #             time_lag = now() - last_registry_update
+        #             if time_lag > max_time_lag
+        #                 task_result = try fetch(registry_update_task); catch err; err end
+        #                 @error "registry update watchdog timer tripped" time_lag max_time_lag task_result
+        #                 exit(1)
+        #             end
+        #             sleep(max_time_lag.value)
+        #         end
+        #     end
+        # else
+        #     @info("Skipping registry update watchdog setup")
+        # end
 
         listen_server = Sockets.listen(config.listen_addr)
         config.listen_server[] = listen_server
